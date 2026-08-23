@@ -1,0 +1,30 @@
+# Rebuilty OS — Optional x64 Compatibility Component
+
+This file documents the planned installer option for enabling x64 compatibility.
+
+## Installer option
+
+[ ] Enable optional x64 compatibility
+
+When selected, the ISO installer/build system should include the x64-compatible components that are actually available in that Rebuilty build.
+
+## Important
+
+This is NOT Microsoft's x64 Windows implementation and must never be populated with proprietary Microsoft Windows source code or binaries.
+
+The eventual implementation must use:
+
+1. ReactOS/open-source components whose licenses permit the intended use; and/or
+2. Original Rebuilty code implementing compatible behavior.
+
+## Current status
+
+PLANNED — this marker exists so the ISO/installer architecture has a documented place for the optional component. The installer must not claim that x64 Windows compatibility is complete until the required components have been implemented and tested.
+
+## Future ISO integration
+
+The ISO build system can use this component as a feature flag, for example:
+
+    REBUILTY_X64_COMPAT=1
+
+The actual build implementation should only enable this flag when the required x64-compatible components are present.
