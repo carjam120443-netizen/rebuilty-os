@@ -32,34 +32,66 @@ jobs:
       - name: Checkout Rebuilty OS
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install ReactOS build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake ninja-build git flex bison \
-            gettext texinfo rsync wget ccache nasm
+            gettext texinfo rsync wget ccache nasm \
+            mingw-w64 gcc-mingw-w64-x86-64 gcc-mingw-w64-i686 \
+            binutils-mingw-w64-x86-64 binutils-mingw-w64-i686
 
       - name: Fetch ReactOS
         run: |
-          chmod +x scripts/fetch-reactos.sh scripts/build.sh scripts/build-iso.sh
+          chmod +x scripts/fetch-reactos.sh
           ./scripts/fetch-reactos.sh
 
-      - name: Configure ReactOS build
+      - name: Configure ReactOS with its native build system
+        working-directory: third_party/reactos
+        env:
+          ROS_ARCH: ${{ inputs.arch || 'amd64' }}
         run: |
-          cmake -S third_party/reactos -B build -G Ninja \
-            -DARCH=${{ inputs.arch || 'amd64' }} \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DENABLE_ROSAPPS=1
+          ./configure.sh
+
+      - name: Find ReactOS build directory
+        id: builddir
+        working-directory: third_party/reactos
+        run: |
+          BUILD_DIR="output-MinGW-${{ inputs.arch == 'i386' && 'i386' || 'amd64' }}"
+          if [ ! -d "$BUILD_DIR" ]; then
+            echo "Expected build directory $BUILD_DIR was not created."
+            echo "Available output directories:"
+            find . -maxdepth 1 -type d -name 'output-*' -print
+            exit 1
+          fi
+          echo "path=$BUILD_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Build Rebuilty OS
-        run: cmake --build build -- -k0
-
-      - name: Generate bootable ISO
-        run: ./scripts/build-iso.sh build
-
-      - name: Verify ISO
+        working-directory: third_party/reactos
         run: |
-          test -f RebuiltyOS.iso
+          ninja -C "${{ steps.builddir.outputs.path }}"
+
+      - name: Build bootable ISO
+        working-directory: third_party/reactos
+        run: |
+          ninja -C "${{ steps.builddir.outputs.path }}" bootcd
+
+      - name: Locate ISO
+        id: iso
+        working-directory: third_party/reactos
+        run: |
+          ISO=$(find "${{ steps.builddir.outputs.path }}" -type f -iname '*.iso' -print -quit)
+          if [ -z "$ISO" ]; then
+            echo 'No ISO was produced.'
+            find "${{ steps.builddir.outputs.path }}" -type f | grep -Ei '\.(iso|img)$' || true
+            exit 1
+          fi
+          echo "path=$ISO" >> "$GITHUB_OUTPUT"
+          ls -lh "$ISO"
+
+      - name: Prepare Rebuilty ISO
+        run: |
+          cp "third_party/reactos/${{ steps.iso.outputs.path }}" RebuiltyOS.iso
           file RebuiltyOS.iso
           ls -lh RebuiltyOS.iso
 
