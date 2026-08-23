@@ -22,11 +22,12 @@ on:
 permissions:
   contents: read
 
+env:
+  ROSBE_CI_DIR: ${{ github.workspace }}/third_party/reactos/RosBE-CI
+
 jobs:
   build-iso:
     runs-on: ubuntu-22.04
-    env:
-      REBUILTY_X64_COMPAT: ${{ inputs.x64_compat || 'false' }}
 
     steps:
       - name: Checkout Rebuilty OS
@@ -38,62 +39,63 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build git flex bison \
             gettext texinfo rsync wget ccache nasm \
-            mingw-w64 gcc-mingw-w64-x86-64 gcc-mingw-w64-i686 \
-            binutils-mingw-w64-x86-64 binutils-mingw-w64-i686
+            gcc-mingw-w64-x86-64 gcc-mingw-w64-i686 \
+            g++-mingw-w64-x86-64 g++-mingw-w64-i686 \
+            binutils-mingw-w64-x86-64 binutils-mingw-w64-i686 \
+            p7zip-full python3
 
       - name: Fetch ReactOS
         run: |
           chmod +x scripts/fetch-reactos.sh
           ./scripts/fetch-reactos.sh
 
-      - name: Configure ReactOS with its native build system
+      - name: Configure using ReactOS RosBE-CI
         working-directory: third_party/reactos
         env:
           ROS_ARCH: ${{ inputs.arch || 'amd64' }}
         run: |
-          ./configure.sh
+          if [ ! -f build_rosbe_ci.sh ]; then
+            echo 'ReactOS build_rosbe_ci.sh was not found.'
+            exit 1
+          fi
+          chmod +x build_rosbe_ci.sh
+          ./build_rosbe_ci.sh "$ROSBE_CI_DIR"
 
-      - name: Find ReactOS build directory
-        id: builddir
+      - name: Configure CMake build
         working-directory: third_party/reactos
+        env:
+          ARCH: ${{ inputs.arch || 'amd64' }}
         run: |
-          BUILD_DIR="output-MinGW-${{ inputs.arch == 'i386' && 'i386' || 'amd64' }}"
+          BUILD_DIR="output-MinGW-${ARCH}"
           if [ ! -d "$BUILD_DIR" ]; then
-            echo "Expected build directory $BUILD_DIR was not created."
-            echo "Available output directories:"
+            echo "Expected $BUILD_DIR was not created."
             find . -maxdepth 1 -type d -name 'output-*' -print
             exit 1
           fi
-          echo "path=$BUILD_DIR" >> "$GITHUB_OUTPUT"
+          echo "BUILD_DIR=$BUILD_DIR" >> "$GITHUB_ENV"
 
-      - name: Build Rebuilty OS
+      - name: Build ReactOS
         working-directory: third_party/reactos
         run: |
-          ninja -C "${{ steps.builddir.outputs.path }}"
+          ninja -C "$BUILD_DIR" -k0
 
       - name: Build bootable ISO
         working-directory: third_party/reactos
         run: |
-          ninja -C "${{ steps.builddir.outputs.path }}" bootcd
+          ninja -C "$BUILD_DIR" bootcd
 
-      - name: Locate ISO
-        id: iso
+      - name: Locate and prepare ISO
         working-directory: third_party/reactos
         run: |
-          ISO=$(find "${{ steps.builddir.outputs.path }}" -type f -iname '*.iso' -print -quit)
+          ISO=$(find "$BUILD_DIR" -type f -iname '*.iso' -print -quit)
           if [ -z "$ISO" ]; then
             echo 'No ISO was produced.'
-            find "${{ steps.builddir.outputs.path }}" -type f | grep -Ei '\.(iso|img)$' || true
+            find "$BUILD_DIR" -type f | grep -Ei '\.(iso|img)$' || true
             exit 1
           fi
-          echo "path=$ISO" >> "$GITHUB_OUTPUT"
-          ls -lh "$ISO"
-
-      - name: Prepare Rebuilty ISO
-        run: |
-          cp "third_party/reactos/${{ steps.iso.outputs.path }}" RebuiltyOS.iso
-          file RebuiltyOS.iso
-          ls -lh RebuiltyOS.iso
+          cp "$ISO" "$GITHUB_WORKSPACE/RebuiltyOS.iso"
+          file "$GITHUB_WORKSPACE/RebuiltyOS.iso"
+          ls -lh "$GITHUB_WORKSPACE/RebuiltyOS.iso"
 
       - name: Upload Rebuilty OS ISO
         uses: actions/upload-artifact@v4
