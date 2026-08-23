@@ -41,7 +41,7 @@ jobs:
 
       - name: Fetch ReactOS
         run: |
-          chmod +x scripts/fetch-reactos.sh scripts/build.sh
+          chmod +x scripts/fetch-reactos.sh scripts/build.sh scripts/build-iso.sh
           ./scripts/fetch-reactos.sh
 
       - name: Configure ReactOS build
@@ -55,22 +55,18 @@ jobs:
         run: cmake --build build -- -k0
 
       - name: Generate bootable ISO
-        run: cmake --build build --target bootcd
+        run: ./scripts/build-iso.sh build
 
       - name: Verify ISO
         run: |
-          test -f build/bootcd.iso
-          file build/bootcd.iso
-          ls -lh build/bootcd.iso
-
-      - name: Rename ISO
-        run: |
-          cp build/bootcd.iso "RebuiltyOS-${{ inputs.arch || 'amd64' }}.iso"
+          test -f RebuiltyOS.iso
+          file RebuiltyOS.iso
+          ls -lh RebuiltyOS.iso
 
       - name: Upload Rebuilty OS ISO
         uses: actions/upload-artifact@v4
         with:
           name: RebuiltyOS-${{ inputs.arch || 'amd64' }}-ISO
-          path: RebuiltyOS-${{ inputs.arch || 'amd64' }}.iso
+          path: RebuiltyOS.iso
           if-no-files-found: error
           retention-days: 14
