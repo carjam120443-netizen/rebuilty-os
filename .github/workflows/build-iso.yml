@@ -43,12 +43,28 @@ jobs:
             gcc-mingw-w64-i686-posix g++-mingw-w64-i686-posix \
             binutils-mingw-w64-x86-64 binutils-mingw-w64-i686
 
+      - name: Fix MinGW GCC plugin version headers
+        run: |
+          # Ubuntu's MinGW GCC packages encode the threading flavor in
+          # GCCPLUGIN_VERSION_MINOR (for example: 10-posix). ReactOS's
+          # gcc_plugin_seh prints this macro as a number, so that form is not
+          # valid C++. Normalize the package header to the numeric GCC minor.
+          for header in \
+            /usr/lib/gcc/x86_64-w64-mingw32/*/plugin/include/plugin-version.h \
+            /usr/lib/gcc/i686-w64-mingw32/*/plugin/include/plugin-version.h; do
+            if [ -f "$header" ]; then
+              echo "Patching $header"
+              sudo sed -E -i 's/(GCCPLUGIN_VERSION_MINOR[[:space:]]+)[0-9]+-(posix|win32)/\1\0/' "$header"
+            fi
+          done
+
+          echo "Detected MinGW plugin headers:"
+          grep -H 'GCCPLUGIN_VERSION_MINOR' \
+            /usr/lib/gcc/x86_64-w64-mingw32/*/plugin/include/plugin-version.h \
+            /usr/lib/gcc/i686-w64-mingw32/*/plugin/include/plugin-version.h || true
+
       - name: Select POSIX MinGW toolchains
         run: |
-          # Ubuntu also installs the Win32 MinGW variants. ReactOS builds an
-          # amd64 GCC SEH plugin and the Win32 GCC 10 package exposes an
-          # invalid plugin-version.h macro such as "10-win32". Use the POSIX
-          # variants so GCCPLUGIN_VERSION_MINOR is a valid numeric value.
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
           sudo update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
