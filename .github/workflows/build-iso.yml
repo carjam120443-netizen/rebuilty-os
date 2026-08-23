@@ -1,0 +1,76 @@
+name: Build Rebuilty OS ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: Target architecture
+        required: true
+        default: amd64
+        type: choice
+        options:
+          - amd64
+          - i386
+      x64_compat:
+        description: Enable optional x64 compatibility components
+        required: true
+        default: false
+        type: boolean
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-22.04
+    env:
+      REBUILTY_X64_COMPAT: ${{ inputs.x64_compat || 'false' }}
+
+    steps:
+      - name: Checkout Rebuilty OS
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build git flex bison \
+            gettext texinfo rsync wget ccache nasm
+
+      - name: Fetch ReactOS
+        run: |
+          chmod +x scripts/fetch-reactos.sh scripts/build.sh
+          ./scripts/fetch-reactos.sh
+
+      - name: Configure ReactOS build
+        run: |
+          cmake -S third_party/reactos -B build -G Ninja \
+            -DARCH=${{ inputs.arch || 'amd64' }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_ROSAPPS=1
+
+      - name: Build Rebuilty OS
+        run: cmake --build build -- -k0
+
+      - name: Generate bootable ISO
+        run: cmake --build build --target bootcd
+
+      - name: Verify ISO
+        run: |
+          test -f build/bootcd.iso
+          file build/bootcd.iso
+          ls -lh build/bootcd.iso
+
+      - name: Rename ISO
+        run: |
+          cp build/bootcd.iso "RebuiltyOS-${{ inputs.arch || 'amd64' }}.iso"
+
+      - name: Upload Rebuilty OS ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: RebuiltyOS-${{ inputs.arch || 'amd64' }}-ISO
+          path: RebuiltyOS-${{ inputs.arch || 'amd64' }}.iso
+          if-no-files-found: error
+          retention-days: 14
