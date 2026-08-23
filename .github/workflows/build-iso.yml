@@ -48,13 +48,13 @@ jobs:
           # Ubuntu's MinGW GCC packages encode the threading flavor in
           # GCCPLUGIN_VERSION_MINOR (for example: 10-posix). ReactOS's
           # gcc_plugin_seh prints this macro as a number, so that form is not
-          # valid C++. Normalize the package header to the numeric GCC minor.
+          # valid C++. Normalize it to the numeric GCC minor (for example 10).
           for header in \
             /usr/lib/gcc/x86_64-w64-mingw32/*/plugin/include/plugin-version.h \
             /usr/lib/gcc/i686-w64-mingw32/*/plugin/include/plugin-version.h; do
             if [ -f "$header" ]; then
               echo "Patching $header"
-              sudo sed -E -i 's/(GCCPLUGIN_VERSION_MINOR[[:space:]]+)[0-9]+-(posix|win32)/\1\0/' "$header"
+              sudo sed -E -i 's/(GCCPLUGIN_VERSION_MINOR[[:space:]]+)([0-9]+)-(posix|win32)/\1\2/' "$header"
             fi
           done
 
