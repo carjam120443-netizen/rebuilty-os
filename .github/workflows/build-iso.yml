@@ -38,8 +38,25 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build git flex bison \
             gettext texinfo rsync wget ccache nasm \
-            mingw-w64 gcc-mingw-w64-x86-64 gcc-mingw-w64-i686 \
+            mingw-w64 \
+            gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
+            gcc-mingw-w64-i686-posix g++-mingw-w64-i686-posix \
             binutils-mingw-w64-x86-64 binutils-mingw-w64-i686
+
+      - name: Select POSIX MinGW toolchains
+        run: |
+          # Ubuntu also installs the Win32 MinGW variants. ReactOS builds an
+          # amd64 GCC SEH plugin and the Win32 GCC 10 package exposes an
+          # invalid plugin-version.h macro such as "10-win32". Use the POSIX
+          # variants so GCCPLUGIN_VERSION_MINOR is a valid numeric value.
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          sudo update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
+          sudo update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
+
+          echo "amd64 GCC: $(x86_64-w64-mingw32-gcc --version | head -n1)"
+          echo "amd64 plugin: $(x86_64-w64-mingw32-gcc --print-file-name=plugin)"
+          echo "i386 GCC: $(i686-w64-mingw32-gcc --version | head -n1)"
 
       - name: Fetch ReactOS
         run: |
